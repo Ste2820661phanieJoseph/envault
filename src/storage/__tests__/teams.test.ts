@@ -65,4 +65,18 @@ describe('teams storage', () => {
   it('returns false when updating role of non-existent member', () => {
     expect(updateMemberRole(tmpDir, 'ghost@example.com', 'member')).toBe(false);
   });
+
+  it('persists multiple members across loadTeams calls', () => {
+    addMember(tmpDir, { id: '1', name: 'Alice', email: 'alice@example.com', role: 'admin' });
+    addMember(tmpDir, { id: '2', name: 'Bob', email: 'bob@example.com', role: 'member' });
+    addMember(tmpDir, { id: '3', name: 'Carol', email: 'carol@example.com', role: 'viewer' });
+
+    const loaded = loadTeams(tmpDir);
+    expect(loaded.members).toHaveLength(3);
+    expect(loaded.members.map((m) => m.email)).toEqual([
+      'alice@example.com',
+      'bob@example.com',
+      'carol@example.com',
+    ]);
+  });
 });
