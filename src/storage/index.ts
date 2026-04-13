@@ -1,3 +1,13 @@
-export { ensureVaultDir, getVaultPath, vaultExists } from './vault';
-export { pushEnv, pullEnv, diffEnv } from './sync';
-export type { SyncOptions } from './sync';
+export * from './vault';
+export * from './sync';
+export * from './lock';
+export * from './history';
+export * from './audit';
+export * from './tags';
+export * from './snapshot';
+export * from './profiles';
+export * from './remote';
+export * from './templates';
+export * from './aliases';
+export * from './hooks';
+export * from './sharing';
