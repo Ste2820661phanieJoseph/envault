@@ -60,9 +60,26 @@ export function isLocked(projectId: string): boolean {
   return Date.now() - info.timestamp < LOCK_TIMEOUT_MS;
 }
 
+/**
+ * Returns the LockInfo for a given project if an active lock exists,
+ * or null if the project is not currently locked.
+ */
+export function getLockInfo(projectId: string): LockInfo | null {
+  const lockPath = getLockPath(projectId);
+  if (!fs.existsSync(lockPath)) return null;
+
+  const raw = fs.readFileSync(lockPath, 'utf-8');
+  const info: LockInfo = JSON.parse(raw);
+  if (Date.now() - info.timestamp >= LOCK_TIMEOUT_MS) return null;
+
+  return info;
+}
+
 export function withLock<T>(projectId: string, fn: () => T): T {
   if (!acquireLock(projectId)) {
-    throw new Error(`Project "${projectId}" is locked by another envault process.`);
+    const info = getLockInfo(projectId);
+    const detail = info ? ` (pid ${info.pid})` : '';
+    throw new Error(`Project "${projectId}" is locked by another envault process${detail}.`);
   }
   try {
     return fn();
