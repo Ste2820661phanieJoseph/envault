@@ -1,6 +1,8 @@
-export { initCommand } from './init';
-export { pushCommand } from './push';
-export { pullCommand } from './pull';
-export type { InitOptions } from './init';
-export type { PushOptions } from './push';
-export type { PullOptions } from './pull';
+export { registerTagCommand } from './tag';
+export { registerLockCommands } from './lock';
+export { registerRotateCommand } from './rotate';
+export { registerHistoryCommand } from './history';
+export { registerAuditCommand } from './audit';
+export { registerStatusCommand } from './status';
+export { registerDiffCommand } from './diff';
+export { registerExportCommand } from './export';
