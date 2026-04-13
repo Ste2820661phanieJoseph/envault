@@ -45,6 +45,10 @@ export function decrypt(payload: EncryptedPayload, password: string): string {
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(tag);
 
-  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-  return decrypted.toString('utf8');
+  try {
+    const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return decrypted.toString('utf8');
+  } catch (err) {
+    throw new Error('Decryption failed: invalid password or corrupted data');
+  }
 }
