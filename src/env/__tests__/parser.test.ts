@@ -40,6 +40,16 @@ describe('parseEnv', () => {
     const result = parseEnv('  KEY  =  value  \n');
     expect(result).toEqual({ KEY: 'value' });
   });
+
+  it('ignores inline comments after values', () => {
+    const result = parseEnv('KEY=value # this is an inline comment\n');
+    expect(result).toEqual({ KEY: 'value' });
+  });
+
+  it('does not strip inline comments inside quoted values', () => {
+    const result = parseEnv('KEY="value # not a comment"\n');
+    expect(result).toEqual({ KEY: 'value # not a comment' });
+  });
 });
 
 describe('serializeEnv', () => {
