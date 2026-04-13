@@ -50,6 +50,16 @@ describe('parseEnv', () => {
     const result = parseEnv('KEY="value # not a comment"\n');
     expect(result).toEqual({ KEY: 'value # not a comment' });
   });
+
+  it('handles windows-style CRLF line endings', () => {
+    const result = parseEnv('FOO=bar\r\nBAZ=qux\r\n');
+    expect(result).toEqual({ FOO: 'bar', BAZ: 'qux' });
+  });
+
+  it('ignores lines without an equals sign', () => {
+    const result = parseEnv('INVALID_LINE\nKEY=value\n');
+    expect(result).toEqual({ KEY: 'value' });
+  });
 });
 
 describe('serializeEnv', () => {
