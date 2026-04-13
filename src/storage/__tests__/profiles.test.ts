@@ -1,101 +1,114 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import * as os from 'os';
+import * as path from 'path';
 import {
-  getProfilesPath,
-  loadProfiles,
   addProfile,
   removeProfile,
   setActiveProfile,
   getActiveProfile,
   listProfiles,
+  loadProfiles,
+  getProfilesPath,
 } from '../profiles';
 
-describe('profiles', () => {
-  let tmpDir: string;
+let tmpDir: string;
 
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'envault-profiles-'));
+beforeEach(() => {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'envault-profiles-'));
+  const vaultDir = path.join(tmpDir, '.envault');
+  fs.mkdirSync(vaultDir, { recursive: true });
+});
+
+afterEach(() => {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+describe('getProfilesPath', () => {
+  it('returns path inside .envault directory', () => {
+    const p = getProfilesPath(tmpDir);
+    expect(p).toContain('.envault');
+    expect(p).toEndWith('profiles.json');
   });
+});
 
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('returns empty store when no profiles file exists', () => {
+describe('loadProfiles', () => {
+  it('returns empty store when file does not exist', () => {
     const store = loadProfiles(tmpDir);
     expect(store.active).toBeNull();
     expect(store.profiles).toEqual({});
   });
+});
 
-  it('getProfilesPath returns correct path', () => {
-    const p = getProfilesPath(tmpDir);
-    expect(p).toBe(path.join(tmpDir, '.envault-profiles.json'));
-  });
-
-  it('addProfile creates a profile and sets it as active', () => {
-    const profile = addProfile('development', '.env.development', 'Dev env', tmpDir);
-    expect(profile.name).toBe('development');
-    expect(profile.envFile).toBe('.env.development');
-    expect(profile.description).toBe('Dev env');
+describe('addProfile', () => {
+  it('adds a profile and persists it', () => {
+    const profile = addProfile(tmpDir, 'dev', '/path/.env.dev', 'Development');
+    expect(profile.name).toBe('dev');
+    expect(profile.envFile).toBe('/path/.env.dev');
+    expect(profile.description).toBe('Development');
     const store = loadProfiles(tmpDir);
-    expect(store.active).toBe('development');
-    expect(store.profiles['development']).toBeDefined();
+    expect(store.profiles['dev']).toBeDefined();
   });
 
-  it('addProfile throws if profile already exists', () => {
-    addProfile('staging', '.env.staging', undefined, tmpDir);
-    expect(() => addProfile('staging', '.env.staging', undefined, tmpDir)).toThrow(
-      'Profile "staging" already exists.'
-    );
-  });
-
-  it('listProfiles returns all profiles', () => {
-    addProfile('development', '.env.development', undefined, tmpDir);
-    addProfile('production', '.env.production', undefined, tmpDir);
-    const profiles = listProfiles(tmpDir);
-    expect(profiles).toHaveLength(2);
-    expect(profiles.map((p) => p.name)).toContain('development');
-    expect(profiles.map((p) => p.name)).toContain('production');
-  });
-
-  it('setActiveProfile changes the active profile', () => {
-    addProfile('development', '.env.development', undefined, tmpDir);
-    addProfile('production', '.env.production', undefined, tmpDir);
-    setActiveProfile('production', tmpDir);
-    const active = getActiveProfile(tmpDir);
-    expect(active?.name).toBe('production');
-  });
-
-  it('setActiveProfile throws if profile does not exist', () => {
-    expect(() => setActiveProfile('nonexistent', tmpDir)).toThrow(
-      'Profile "nonexistent" does not exist.'
-    );
-  });
-
-  it('removeProfile deletes the profile and updates active', () => {
-    addProfile('development', '.env.development', undefined, tmpDir);
-    addProfile('production', '.env.production', undefined, tmpDir);
-    setActiveProfile('development', tmpDir);
-    removeProfile('development', tmpDir);
+  it('overwrites an existing profile with the same name', () => {
+    addProfile(tmpDir, 'dev', '/old.env');
+    addProfile(tmpDir, 'dev', '/new.env');
     const store = loadProfiles(tmpDir);
-    expect(store.profiles['development']).toBeUndefined();
-    expect(store.active).toBe('production');
+    expect(store.profiles['dev'].envFile).toBe('/new.env');
+  });
+});
+
+describe('removeProfile', () => {
+  it('removes an existing profile', () => {
+    addProfile(tmpDir, 'staging', '/staging.env');
+    const result = removeProfile(tmpDir, 'staging');
+    expect(result).toBe(true);
+    const store = loadProfiles(tmpDir);
+    expect(store.profiles['staging']).toBeUndefined();
   });
 
-  it('removeProfile sets active to null when last profile removed', () => {
-    addProfile('development', '.env.development', undefined, tmpDir);
-    removeProfile('development', tmpDir);
+  it('returns false for non-existent profile', () => {
+    const result = removeProfile(tmpDir, 'ghost');
+    expect(result).toBe(false);
+  });
+
+  it('clears active if removed profile was active', () => {
+    addProfile(tmpDir, 'prod', '/prod.env');
+    setActiveProfile(tmpDir, 'prod');
+    removeProfile(tmpDir, 'prod');
     const store = loadProfiles(tmpDir);
     expect(store.active).toBeNull();
   });
+});
 
-  it('removeProfile throws if profile does not exist', () => {
-    expect(() => removeProfile('ghost', tmpDir)).toThrow('Profile "ghost" does not exist.');
+describe('setActiveProfile / getActiveProfile', () => {
+  it('sets and retrieves the active profile', () => {
+    addProfile(tmpDir, 'qa', '/qa.env');
+    const ok = setActiveProfile(tmpDir, 'qa');
+    expect(ok).toBe(true);
+    const active = getActiveProfile(tmpDir);
+    expect(active?.name).toBe('qa');
   });
 
-  it('getActiveProfile returns null when no profiles exist', () => {
-    const active = getActiveProfile(tmpDir);
-    expect(active).toBeNull();
+  it('returns false when profile does not exist', () => {
+    const ok = setActiveProfile(tmpDir, 'missing');
+    expect(ok).toBe(false);
+  });
+
+  it('returns null when no active profile is set', () => {
+    expect(getActiveProfile(tmpDir)).toBeNull();
+  });
+});
+
+describe('listProfiles', () => {
+  it('returns all profiles as an array', () => {
+    addProfile(tmpDir, 'dev', '/dev.env');
+    addProfile(tmpDir, 'prod', '/prod.env');
+    const profiles = listProfiles(tmpDir);
+    expect(profiles).toHaveLength(2);
+    expect(profiles.map((p) => p.name)).toEqual(expect.arrayContaining(['dev', 'prod']));
+  });
+
+  it('returns empty array when no profiles exist', () => {
+    expect(listProfiles(tmpDir)).toEqual([]);
   });
 });

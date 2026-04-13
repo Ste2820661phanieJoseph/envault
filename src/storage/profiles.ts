@@ -1,10 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { getVaultPath } from './vault';
 
 export interface Profile {
   name: string;
-  envFile: string;
   description?: string;
+  envFile: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -14,14 +15,12 @@ export interface ProfilesStore {
   profiles: Record<string, Profile>;
 }
 
-const PROFILES_FILE = '.envault-profiles.json';
-
-export function getProfilesPath(projectDir: string = process.cwd()): string {
-  return path.join(projectDir, PROFILES_FILE);
+export function getProfilesPath(projectPath: string): string {
+  return path.join(getVaultPath(projectPath), 'profiles.json');
 }
 
-export function loadProfiles(projectDir: string = process.cwd()): ProfilesStore {
-  const filePath = getProfilesPath(projectDir);
+export function loadProfiles(projectPath: string): ProfilesStore {
+  const filePath = getProfilesPath(projectPath);
   if (!fs.existsSync(filePath)) {
     return { active: null, profiles: {} };
   }
@@ -29,58 +28,55 @@ export function loadProfiles(projectDir: string = process.cwd()): ProfilesStore 
   return JSON.parse(raw) as ProfilesStore;
 }
 
-export function saveProfiles(store: ProfilesStore, projectDir: string = process.cwd()): void {
-  const filePath = getProfilesPath(projectDir);
+export function saveProfiles(projectPath: string, store: ProfilesStore): void {
+  const filePath = getProfilesPath(projectPath);
   fs.writeFileSync(filePath, JSON.stringify(store, null, 2), 'utf-8');
 }
 
 export function addProfile(
+  projectPath: string,
   name: string,
   envFile: string,
-  description?: string,
-  projectDir: string = process.cwd()
+  description?: string
 ): Profile {
-  const store = loadProfiles(projectDir);
-  if (store.profiles[name]) {
-    throw new Error(`Profile "${name}" already exists.`);
-  }
+  const store = loadProfiles(projectPath);
   const now = new Date().toISOString();
-  const profile: Profile = { name, envFile, description, createdAt: now, updatedAt: now };
+  const profile: Profile = {
+    name,
+    description,
+    envFile,
+    createdAt: now,
+    updatedAt: now,
+  };
   store.profiles[name] = profile;
-  if (!store.active) store.active = name;
-  saveProfiles(store, projectDir);
+  saveProfiles(projectPath, store);
   return profile;
 }
 
-export function removeProfile(name: string, projectDir: string = process.cwd()): void {
-  const store = loadProfiles(projectDir);
-  if (!store.profiles[name]) {
-    throw new Error(`Profile "${name}" does not exist.`);
-  }
+export function removeProfile(projectPath: string, name: string): boolean {
+  const store = loadProfiles(projectPath);
+  if (!store.profiles[name]) return false;
   delete store.profiles[name];
-  if (store.active === name) {
-    const remaining = Object.keys(store.profiles);
-    store.active = remaining.length > 0 ? remaining[0] : null;
-  }
-  saveProfiles(store, projectDir);
+  if (store.active === name) store.active = null;
+  saveProfiles(projectPath, store);
+  return true;
 }
 
-export function setActiveProfile(name: string, projectDir: string = process.cwd()): void {
-  const store = loadProfiles(projectDir);
-  if (!store.profiles[name]) {
-    throw new Error(`Profile "${name}" does not exist.`);
-  }
+export function setActiveProfile(projectPath: string, name: string): boolean {
+  const store = loadProfiles(projectPath);
+  if (!store.profiles[name]) return false;
   store.active = name;
-  saveProfiles(store, projectDir);
+  saveProfiles(projectPath, store);
+  return true;
 }
 
-export function getActiveProfile(projectDir: string = process.cwd()): Profile | null {
-  const store = loadProfiles(projectDir);
+export function getActiveProfile(projectPath: string): Profile | null {
+  const store = loadProfiles(projectPath);
   if (!store.active) return null;
   return store.profiles[store.active] ?? null;
 }
 
-export function listProfiles(projectDir: string = process.cwd()): Profile[] {
-  const store = loadProfiles(projectDir);
+export function listProfiles(projectPath: string): Profile[] {
+  const store = loadProfiles(projectPath);
   return Object.values(store.profiles);
 }
