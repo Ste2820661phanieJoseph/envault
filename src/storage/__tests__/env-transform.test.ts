@@ -1,79 +1,86 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { applyTransform, transformEnvFile, writeTransformedEnv } from '../env-transform';
+import {
+  applyTransform,
+  transformEnvFile,
+  writeTransformedEnv,
+  TransformRule,
+} from '../env-transform';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'envault-transform-'));
 }
 
 describe('applyTransform', () => {
-  const sample = { api_key: 'secret123', db_host: 'localhost' };
+  const base = { DB_HOST: 'localhost', DB_PASS: 'secret', API_KEY: 'abc123' };
 
-  it('uppercase-keys transforms all keys to uppercase', () => {
-    const result = applyTransform(sample, { type: 'uppercase-keys' });
-    expect(result).toEqual({ API_KEY: 'secret123', DB_HOST: 'localhost' });
+  it('uppercase-keys transforms all keys', () => {
+    const result = applyTransform({ db_host: 'localhost' }, { type: 'uppercase-keys' });
+    expect(result).toEqual({ DB_HOST: 'localhost' });
   });
 
-  it('lowercase-keys transforms all keys to lowercase', () => {
-    const input = { API_KEY: 'secret123', DB_HOST: 'localhost' };
-    const result = applyTransform(input, { type: 'lowercase-keys' });
-    expect(result).toEqual({ api_key: 'secret123', db_host: 'localhost' });
+  it('lowercase-values lowercases values', () => {
+    const result = applyTransform({ KEY: 'HELLO' }, { type: 'lowercase-values' });
+    expect(result).toEqual({ KEY: 'hello' });
   });
 
   it('prefix adds prefix to all keys', () => {
-    const result = applyTransform(sample, { type: 'prefix', prefix: 'APP_' });
-    expect(result).toHaveProperty('APP_api_key', 'secret123');
-    expect(result).toHaveProperty('APP_db_host', 'localhost');
+    const result = applyTransform({ HOST: 'localhost' }, { type: 'prefix', options: { prefix: 'APP_' } });
+    expect(result).toHaveProperty('APP_HOST', 'localhost');
   });
 
   it('strip-prefix removes prefix from matching keys', () => {
-    const input = { APP_api_key: 'secret123', APP_db_host: 'localhost', other: 'val' };
-    const result = applyTransform(input, { type: 'strip-prefix', prefix: 'APP_' });
-    expect(result).toHaveProperty('api_key', 'secret123');
-    expect(result).toHaveProperty('db_host', 'localhost');
-    expect(result).toHaveProperty('other', 'val');
+    const result = applyTransform({ APP_HOST: 'localhost', OTHER: 'val' }, { type: 'strip-prefix', options: { prefix: 'APP_' } });
+    expect(result).toHaveProperty('HOST', 'localhost');
+    expect(result).toHaveProperty('OTHER', 'val');
   });
 
-  it('mask-values replaces values with asterisks', () => {
-    const result = applyTransform(sample, { type: 'mask-values' });
-    expect(result['api_key']).toBe('*'.repeat('secret123'.length));
-    expect(result['db_host']).toBe('*'.repeat('localhost'.length));
+  it('mask replaces specified key values with ***', () => {
+    const result = applyTransform(base, { type: 'mask', options: { keys: 'DB_PASS,API_KEY' } });
+    expect(result.DB_PASS).toBe('***');
+    expect(result.API_KEY).toBe('***');
+    expect(result.DB_HOST).toBe('localhost');
   });
 
-  it('mask-values uses custom maskChar', () => {
-    const result = applyTransform({ key: 'abc' }, { type: 'mask-values', maskChar: '#' });
-    expect(result['key']).toBe('###');
-  });
-
-  it('mask-values handles empty string value', () => {
-    const result = applyTransform({ key: '' }, { type: 'mask-values' });
-    expect(result['key']).toBe('');
+  it('rename renames a specific key', () => {
+    const result = applyTransform({ OLD_KEY: 'value', OTHER: 'x' }, { type: 'rename', options: { from: 'OLD_KEY', to: 'NEW_KEY' } });
+    expect(result).toHaveProperty('NEW_KEY', 'value');
+    expect(result).not.toHaveProperty('OLD_KEY');
+    expect(result).toHaveProperty('OTHER', 'x');
   });
 });
 
 describe('transformEnvFile', () => {
-  it('reads and transforms a .env file', () => {
-    const dir = makeTmpDir();
-    const filePath = path.join(dir, '.env');
-    fs.writeFileSync(filePath, 'API_KEY=secret\nDB_HOST=localhost\n', 'utf-8');
-    const result = transformEnvFile(filePath, { type: 'lowercase-keys' });
-    expect(result).toHaveProperty('api_key', 'secret');
-    expect(result).toHaveProperty('db_host', 'localhost');
-    fs.rmSync(dir, { recursive: true });
+  it('reads a file and applies rules', () => {
+    const tmp = makeTmpDir();
+    const file = path.join(tmp, '.env');
+    fs.writeFileSync(file, 'db_host=localhost\ndb_pass=secret\n');
+
+    const result = transformEnvFile(file, [{ type: 'uppercase-keys' }]);
+    expect(result).toHaveProperty('DB_HOST', 'localhost');
+    expect(result).toHaveProperty('DB_PASS', 'secret');
+  });
+
+  it('applies multiple rules in sequence', () => {
+    const tmp = makeTmpDir();
+    const file = path.join(tmp, '.env');
+    fs.writeFileSync(file, 'host=LOCALHOST\n');
+
+    const result = transformEnvFile(file, [
+      { type: 'uppercase-keys' },
+      { type: 'lowercase-values' },
+    ]);
+    expect(result).toEqual({ HOST: 'localhost' });
   });
 });
 
 describe('writeTransformedEnv', () => {
-  it('writes transformed env to output file', () => {
-    const dir = makeTmpDir();
-    const inputPath = path.join(dir, '.env');
-    const outputPath = path.join(dir, 'out', '.env.transformed');
-    fs.writeFileSync(inputPath, 'api_key=secret\ndb_host=localhost\n', 'utf-8');
-    writeTransformedEnv(inputPath, outputPath, { type: 'uppercase-keys' });
-    const contents = fs.readFileSync(outputPath, 'utf-8');
-    expect(contents).toContain('API_KEY=secret');
-    expect(contents).toContain('DB_HOST=localhost');
-    fs.rmSync(dir, { recursive: true });
+  it('writes serialized env to output path', () => {
+    const tmp = makeTmpDir();
+    const out = path.join(tmp, 'out', '.env');
+    writeTransformedEnv({ KEY: 'value' }, out);
+    const content = fs.readFileSync(out, 'utf-8');
+    expect(content).toContain('KEY=value');
   });
 });

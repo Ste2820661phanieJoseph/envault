@@ -4,49 +4,54 @@ import { parseEnv, serializeEnv } from '../env/parser';
 
 export type TransformFn = (key: string, value: string) => { key: string; value: string };
 
-export type TransformType = 'uppercase-keys' | 'lowercase-keys' | 'prefix' | 'strip-prefix' | 'mask-values';
-
-export interface TransformOptions {
-  type: TransformType;
-  prefix?: string;
-  maskChar?: string;
+export interface TransformRule {
+  type: 'rename' | 'uppercase-keys' | 'lowercase-values' | 'prefix' | 'strip-prefix' | 'mask';
+  options?: Record<string, string>;
 }
 
 export function applyTransform(
   envMap: Record<string, string>,
-  options: TransformOptions
+  rule: TransformRule
 ): Record<string, string> {
   const result: Record<string, string> = {};
 
-  for (const [key, value] of Object.entries(envMap)) {
-    let newKey = key;
-    let newValue = value;
-
-    switch (options.type) {
+  for (const [k, v] of Object.entries(envMap)) {
+    switch (rule.type) {
       case 'uppercase-keys':
-        newKey = key.toUpperCase();
+        result[k.toUpperCase()] = v;
         break;
-      case 'lowercase-keys':
-        newKey = key.toLowerCase();
+      case 'lowercase-values':
+        result[k] = v.toLowerCase();
         break;
-      case 'prefix':
-        if (options.prefix) {
-          newKey = `${options.prefix}${key}`;
-        }
-        break;
-      case 'strip-prefix':
-        if (options.prefix && key.startsWith(options.prefix)) {
-          newKey = key.slice(options.prefix.length);
-        }
-        break;
-      case 'mask-values': {
-        const char = options.maskChar ?? '*';
-        newValue = value.length > 0 ? char.repeat(value.length) : '';
+      case 'prefix': {
+        const pfx = rule.options?.prefix ?? '';
+        result[`${pfx}${k}`] = v;
         break;
       }
+      case 'strip-prefix': {
+        const pfx = rule.options?.prefix ?? '';
+        const newKey = k.startsWith(pfx) ? k.slice(pfx.length) : k;
+        result[newKey] = v;
+        break;
+      }
+      case 'mask': {
+        const keys = (rule.options?.keys ?? '').split(',').map((s) => s.trim());
+        result[k] = keys.includes(k) ? '***' : v;
+        break;
+      }
+      case 'rename': {
+        const from = rule.options?.from;
+        const to = rule.options?.to;
+        if (from && to && k === from) {
+          result[to] = v;
+        } else {
+          result[k] = v;
+        }
+        break;
+      }
+      default:
+        result[k] = v;
     }
-
-    result[newKey] = newValue;
   }
 
   return result;
@@ -54,20 +59,21 @@ export function applyTransform(
 
 export function transformEnvFile(
   filePath: string,
-  options: TransformOptions
+  rules: TransformRule[]
 ): Record<string, string> {
   const raw = fs.readFileSync(filePath, 'utf-8');
-  const envMap = parseEnv(raw);
-  return applyTransform(envMap, options);
+  let envMap = parseEnv(raw);
+  for (const rule of rules) {
+    envMap = applyTransform(envMap, rule);
+  }
+  return envMap;
 }
 
 export function writeTransformedEnv(
-  inputPath: string,
-  outputPath: string,
-  options: TransformOptions
+  envMap: Record<string, string>,
+  outPath: string
 ): void {
-  const transformed = transformEnvFile(inputPath, options);
-  const serialized = serializeEnv(transformed);
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, serialized, 'utf-8');
+  const dir = path.dirname(outPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(outPath, serializeEnv(envMap), 'utf-8');
 }
