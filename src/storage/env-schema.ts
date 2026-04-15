@@ -1,76 +1,80 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-export interface EnvSchemaField {
+export interface SchemaField {
   key: string;
   required: boolean;
   description?: string;
-  defaultValue?: string;
   pattern?: string;
+  defaultValue?: string;
 }
 
 export interface EnvSchema {
-  fields: EnvSchemaField[];
-  version: number;
+  fields: SchemaField[];
+  createdAt: string;
   updatedAt: string;
 }
 
-export function getSchemaPath(vaultDir: string, project: string): string {
-  return path.join(vaultDir, project, 'schema.json');
+export function getSchemaPath(vaultDir: string): string {
+  return path.join(vaultDir, 'schema.json');
 }
 
-export function loadSchema(vaultDir: string, project: string): EnvSchema {
-  const schemaPath = getSchemaPath(vaultDir, project);
+export function loadSchema(vaultDir: string): EnvSchema {
+  const schemaPath = getSchemaPath(vaultDir);
   if (!fs.existsSync(schemaPath)) {
-    return { fields: [], version: 1, updatedAt: new Date().toISOString() };
+    return { fields: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   }
   const raw = fs.readFileSync(schemaPath, 'utf-8');
   return JSON.parse(raw) as EnvSchema;
 }
 
-export function saveSchema(vaultDir: string, project: string, schema: EnvSchema): void {
-  const schemaPath = getSchemaPath(vaultDir, project);
-  fs.mkdirSync(path.dirname(schemaPath), { recursive: true });
+export function saveSchema(vaultDir: string, schema: EnvSchema): void {
+  const schemaPath = getSchemaPath(vaultDir);
+  fs.mkdirSync(vaultDir, { recursive: true });
   fs.writeFileSync(schemaPath, JSON.stringify(schema, null, 2), 'utf-8');
 }
 
-export function addSchemaField(vaultDir: string, project: string, field: EnvSchemaField): EnvSchema {
-  const schema = loadSchema(vaultDir, project);
-  const existing = schema.fields.findIndex(f => f.key === field.key);
-  if (existing >= 0) {
-    schema.fields[existing] = field;
+export function addSchemaField(vaultDir: string, field: SchemaField): EnvSchema {
+  const schema = loadSchema(vaultDir);
+  const exists = schema.fields.findIndex(f => f.key === field.key);
+  if (exists !== -1) {
+    schema.fields[exists] = field;
   } else {
     schema.fields.push(field);
   }
   schema.updatedAt = new Date().toISOString();
-  saveSchema(vaultDir, project, schema);
+  saveSchema(vaultDir, schema);
   return schema;
 }
 
-export function removeSchemaField(vaultDir: string, project: string, key: string): EnvSchema {
-  const schema = loadSchema(vaultDir, project);
+export function removeSchemaField(vaultDir: string, key: string): EnvSchema {
+  const schema = loadSchema(vaultDir);
   schema.fields = schema.fields.filter(f => f.key !== key);
   schema.updatedAt = new Date().toISOString();
-  saveSchema(vaultDir, project, schema);
+  saveSchema(vaultDir, schema);
   return schema;
 }
 
 export function validateAgainstSchema(
-  envMap: Record<string, string>,
-  schema: EnvSchema
+  vaultDir: string,
+  envMap: Record<string, string>
 ): { valid: boolean; errors: string[] } {
+  const schema = loadSchema(vaultDir);
   const errors: string[] = [];
+
   for (const field of schema.fields) {
-    if (field.required && !(field.key in envMap)) {
-      errors.push(`Missing required key: ${field.key}`);
+    const value = envMap[field.key];
+    if (field.required && (value === undefined || value === '')) {
+      errors.push(`Missing required field: ${field.key}`);
       continue;
     }
-    if (field.pattern && field.key in envMap) {
+    if (value !== undefined && field.pattern) {
       const regex = new RegExp(field.pattern);
-      if (!regex.test(envMap[field.key])) {
-        errors.push(`Key "${field.key}" does not match pattern: ${field.pattern}`);
+      if (!regex.test(value)) {
+        errors.push(`Field "${field.key}" does not match pattern ${field.pattern}`);
       }
     }
   }
+
   return { valid: errors.length === 0, errors };
 }
