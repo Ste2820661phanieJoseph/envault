@@ -89,4 +89,26 @@ export function registerEnvGroupCommand(program: Command): void {
       console.log(`Created:     ${found.createdAt}`);
       console.log(`Updated:     ${found.updatedAt}`);
     });
+
+  group
+    .command('rename <oldName> <newName>')
+    .description('Rename an existing env group')
+    .action((oldName: string, newName: string) => {
+      const vaultDir = getVaultDir();
+      const existing = getEnvGroup(vaultDir, oldName);
+      if (!existing) {
+        console.error(`Group "${oldName}" not found.`);
+        process.exitCode = 1;
+        return;
+      }
+      const conflict = getEnvGroup(vaultDir, newName);
+      if (conflict) {
+        console.error(`A group named "${newName}" already exists.`);
+        process.exitCode = 1;
+        return;
+      }
+      removeEnvGroup(vaultDir, oldName);
+      addEnvGroup(vaultDir, newName, existing.keys, existing.description);
+      console.log(`Group "${oldName}" renamed to "${newName}".`);
+    });
 }
