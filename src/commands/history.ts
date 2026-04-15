@@ -12,6 +12,10 @@ export function registerHistoryCommand(program: Command): void {
     .option('-n, --limit <number>', 'Limit number of entries shown', '20')
     .action((projectId: string, options: { limit: string }) => {
       const limit = parseInt(options.limit, 10);
+      if (isNaN(limit) || limit <= 0) {
+        console.error('Error: --limit must be a positive integer.');
+        process.exit(1);
+      }
       const history = loadHistory(projectId);
       if (history.length === 0) {
         console.log(`No history found for project "${projectId}".`);
