@@ -15,11 +15,20 @@ function buildProgram() {
   return program;
 }
 
+/**
+ * Creates a temporary .env file with the given content and returns
+ * both the directory and file paths for cleanup after the test.
+ */
+function makeTmpEnvFile(content: string): { dir: string; file: string } {
+  const dir = makeTmpDir();
+  const file = path.join(dir, '.env');
+  fs.writeFileSync(file, content);
+  return { dir, file };
+}
+
 describe('placeholder check command', () => {
   it('reports no placeholders when all values are real', () => {
-    const dir = makeTmpDir();
-    const file = path.join(dir, '.env');
-    fs.writeFileSync(file, 'HOST=localhost\nPORT=3000\n');
+    const { dir, file } = makeTmpEnvFile('HOST=localhost\nPORT=3000\n');
     const logs: string[] = [];
     jest.spyOn(console, 'log').mockImplementation((m) => logs.push(m));
     buildProgram().parse(['placeholder', 'check', file], { from: 'user' });
@@ -29,9 +38,7 @@ describe('placeholder check command', () => {
   });
 
   it('lists placeholder keys', () => {
-    const dir = makeTmpDir();
-    const file = path.join(dir, '.env');
-    fs.writeFileSync(file, 'API_KEY=<YOUR_API_KEY>\nHOST=localhost\n');
+    const { dir, file } = makeTmpEnvFile('API_KEY=<YOUR_API_KEY>\nHOST=localhost\n');
     const logs: string[] = [];
     jest.spyOn(console, 'log').mockImplementation((m) => logs.push(m));
     buildProgram().parse(['placeholder', 'check', file], { from: 'user' });
@@ -55,9 +62,7 @@ describe('placeholder check command', () => {
 
 describe('placeholder fill command', () => {
   it('fills placeholder values from --values option', async () => {
-    const dir = makeTmpDir();
-    const file = path.join(dir, '.env');
-    fs.writeFileSync(file, 'API_KEY=<YOUR_API_KEY>\nHOST=localhost\n');
+    const { dir, file } = makeTmpEnvFile('API_KEY=<YOUR_API_KEY>\nHOST=localhost\n');
     const logs: string[] = [];
     jest.spyOn(console, 'log').mockImplementation((m) => logs.push(m));
     await buildProgram().parseAsync(
