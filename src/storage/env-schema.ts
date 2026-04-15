@@ -30,19 +30,18 @@ export function loadSchema(vaultDir: string): EnvSchema {
 
 export function saveSchema(vaultDir: string, schema: EnvSchema): void {
   const schemaPath = getSchemaPath(vaultDir);
-  fs.mkdirSync(vaultDir, { recursive: true });
+  schema.updatedAt = new Date().toISOString();
   fs.writeFileSync(schemaPath, JSON.stringify(schema, null, 2), 'utf-8');
 }
 
 export function addSchemaField(vaultDir: string, field: SchemaField): EnvSchema {
   const schema = loadSchema(vaultDir);
-  const exists = schema.fields.findIndex(f => f.key === field.key);
-  if (exists !== -1) {
-    schema.fields[exists] = field;
+  const existing = schema.fields.findIndex(f => f.key === field.key);
+  if (existing >= 0) {
+    schema.fields[existing] = field;
   } else {
     schema.fields.push(field);
   }
-  schema.updatedAt = new Date().toISOString();
   saveSchema(vaultDir, schema);
   return schema;
 }
@@ -50,18 +49,15 @@ export function addSchemaField(vaultDir: string, field: SchemaField): EnvSchema 
 export function removeSchemaField(vaultDir: string, key: string): EnvSchema {
   const schema = loadSchema(vaultDir);
   schema.fields = schema.fields.filter(f => f.key !== key);
-  schema.updatedAt = new Date().toISOString();
   saveSchema(vaultDir, schema);
   return schema;
 }
 
 export function validateAgainstSchema(
-  vaultDir: string,
-  envMap: Record<string, string>
+  envMap: Record<string, string>,
+  schema: EnvSchema
 ): { valid: boolean; errors: string[] } {
-  const schema = loadSchema(vaultDir);
   const errors: string[] = [];
-
   for (const field of schema.fields) {
     const value = envMap[field.key];
     if (field.required && (value === undefined || value === '')) {
@@ -71,10 +67,9 @@ export function validateAgainstSchema(
     if (value !== undefined && field.pattern) {
       const regex = new RegExp(field.pattern);
       if (!regex.test(value)) {
-        errors.push(`Field "${field.key}" does not match pattern ${field.pattern}`);
+        errors.push(`Field "${field.key}" does not match pattern: ${field.pattern}`);
       }
     }
   }
-
   return { valid: errors.length === 0, errors };
 }

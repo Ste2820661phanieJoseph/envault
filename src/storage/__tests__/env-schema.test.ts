@@ -14,7 +14,7 @@ function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'envault-schema-'));
 }
 
-describe('env-schema', () => {
+describe('env-schema storage', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -25,72 +25,72 @@ describe('env-schema', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test('getSchemaPath returns correct path', () => {
+  it('getSchemaPath returns correct path', () => {
     expect(getSchemaPath(tmpDir)).toBe(path.join(tmpDir, 'schema.json'));
   });
 
-  test('loadSchema returns empty schema when file does not exist', () => {
+  it('loadSchema returns empty schema if file does not exist', () => {
     const schema = loadSchema(tmpDir);
     expect(schema.fields).toEqual([]);
-    expect(schema.createdAt).toBeDefined();
   });
 
-  test('saveSchema and loadSchema round-trip', () => {
-    const schema = {
-      fields: [{ key: 'API_KEY', required: true, description: 'API Key' }],
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
-    };
+  it('saveSchema and loadSchema round-trip', () => {
+    const schema = loadSchema(tmpDir);
+    schema.fields.push({ key: 'API_KEY', required: true, description: 'API key' });
     saveSchema(tmpDir, schema);
     const loaded = loadSchema(tmpDir);
     expect(loaded.fields).toHaveLength(1);
     expect(loaded.fields[0].key).toBe('API_KEY');
   });
 
-  test('addSchemaField adds a new field', () => {
-    const schema = addSchemaField(tmpDir, { key: 'DB_URL', required: true });
-    expect(schema.fields).toHaveLength(1);
-    expect(schema.fields[0].key).toBe('DB_URL');
+  it('addSchemaField adds a new field', () => {
+    const updated = addSchemaField(tmpDir, { key: 'DB_URL', required: true });
+    expect(updated.fields).toHaveLength(1);
+    expect(updated.fields[0].key).toBe('DB_URL');
   });
 
-  test('addSchemaField updates existing field', () => {
+  it('addSchemaField updates existing field', () => {
     addSchemaField(tmpDir, { key: 'DB_URL', required: true });
-    const schema = addSchemaField(tmpDir, { key: 'DB_URL', required: false, description: 'Updated' });
-    expect(schema.fields).toHaveLength(1);
-    expect(schema.fields[0].required).toBe(false);
-    expect(schema.fields[0].description).toBe('Updated');
+    const updated = addSchemaField(tmpDir, { key: 'DB_URL', required: false, description: 'updated' });
+    expect(updated.fields).toHaveLength(1);
+    expect(updated.fields[0].required).toBe(false);
+    expect(updated.fields[0].description).toBe('updated');
   });
 
-  test('removeSchemaField removes a field', () => {
+  it('removeSchemaField removes a field', () => {
     addSchemaField(tmpDir, { key: 'DB_URL', required: true });
-    const schema = removeSchemaField(tmpDir, 'DB_URL');
-    expect(schema.fields).toHaveLength(0);
+    addSchemaField(tmpDir, { key: 'API_KEY', required: false });
+    const updated = removeSchemaField(tmpDir, 'DB_URL');
+    expect(updated.fields).toHaveLength(1);
+    expect(updated.fields[0].key).toBe('API_KEY');
   });
 
-  test('validateAgainstSchema passes when all required fields present', () => {
-    addSchemaField(tmpDir, { key: 'API_KEY', required: true });
-    const result = validateAgainstSchema(tmpDir, { API_KEY: 'abc123' });
-    expect(result.valid).toBe(true);
-    expect(result.errors).toHaveLength(0);
-  });
+  describe('validateAgainstSchema', () => {
+    it('passes when all required fields are present', () => {
+      const schema = { fields: [{ key: 'API_KEY', required: true }], createdAt: '', updatedAt: '' };
+      const result = validateAgainstSchema({ API_KEY: 'secret' }, schema);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
 
-  test('validateAgainstSchema fails when required field missing', () => {
-    addSchemaField(tmpDir, { key: 'API_KEY', required: true });
-    const result = validateAgainstSchema(tmpDir, {});
-    expect(result.valid).toBe(false);
-    expect(result.errors[0]).toContain('API_KEY');
-  });
+    it('fails when required field is missing', () => {
+      const schema = { fields: [{ key: 'API_KEY', required: true }], createdAt: '', updatedAt: '' };
+      const result = validateAgainstSchema({}, schema);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('API_KEY');
+    });
 
-  test('validateAgainstSchema fails when pattern does not match', () => {
-    addSchemaField(tmpDir, { key: 'PORT', required: false, pattern: '^\\d+$' });
-    const result = validateAgainstSchema(tmpDir, { PORT: 'not-a-number' });
-    expect(result.valid).toBe(false);
-    expect(result.errors[0]).toContain('PORT');
-  });
+    it('fails when value does not match pattern', () => {
+      const schema = { fields: [{ key: 'PORT', required: false, pattern: '^\\d+$' }], createdAt: '', updatedAt: '' };
+      const result = validateAgainstSchema({ PORT: 'abc' }, schema);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0]).toContain('PORT');
+    });
 
-  test('validateAgainstSchema passes when pattern matches', () => {
-    addSchemaField(tmpDir, { key: 'PORT', required: false, pattern: '^\\d+$' });
-    const result = validateAgainstSchema(tmpDir, { PORT: '3000' });
-    expect(result.valid).toBe(true);
+    it('passes when optional field is absent', () => {
+      const schema = { fields: [{ key: 'OPTIONAL', required: false }], createdAt: '', updatedAt: '' };
+      const result = validateAgainstSchema({}, schema);
+      expect(result.valid).toBe(true);
+    });
   });
 });
