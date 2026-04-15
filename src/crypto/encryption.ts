@@ -52,3 +52,25 @@ export function decrypt(payload: EncryptedPayload, password: string): string {
     throw new Error('Decryption failed: invalid password or corrupted data');
   }
 }
+
+/**
+ * Serializes an EncryptedPayload to a compact base64 string for storage or transport.
+ * Format: <salt>:<iv>:<tag>:<ciphertext> (each hex-encoded, joined and base64-encoded).
+ */
+export function serializePayload(payload: EncryptedPayload): string {
+  const raw = `${payload.salt}:${payload.iv}:${payload.tag}:${payload.ciphertext}`;
+  return Buffer.from(raw, 'utf8').toString('base64');
+}
+
+/**
+ * Deserializes a base64 string produced by {@link serializePayload} back into an EncryptedPayload.
+ */
+export function deserializePayload(serialized: string): EncryptedPayload {
+  const raw = Buffer.from(serialized, 'base64').toString('utf8');
+  const parts = raw.split(':');
+  if (parts.length !== 4) {
+    throw new Error('Invalid serialized payload format');
+  }
+  const [salt, iv, tag, ciphertext] = parts;
+  return { salt, iv, tag, ciphertext };
+}
