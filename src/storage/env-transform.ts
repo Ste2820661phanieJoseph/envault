@@ -61,7 +61,15 @@ export function transformEnvFile(
   filePath: string,
   rules: TransformRule[]
 ): Record<string, string> {
-  const raw = fs.readFileSync(filePath, 'utf-8');
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`transformEnvFile: file not found: ${filePath}`);
+  }
+  let raw: string;
+  try {
+    raw = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    throw new Error(`transformEnvFile: failed to read file "${filePath}": ${(err as Error).message}`);
+  }
   let envMap = parseEnv(raw);
   for (const rule of rules) {
     envMap = applyTransform(envMap, rule);
