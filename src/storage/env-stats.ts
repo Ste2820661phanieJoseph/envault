@@ -40,8 +40,18 @@ export function computeEnvStats(envMap: Record<string, string>): EnvStats {
   };
 }
 
+/**
+ * Reads and parses a .env file from disk, then computes its stats.
+ * Throws a descriptive error if the file cannot be read.
+ */
 export function computeEnvFileStats(filePath: string): EnvStats {
-  const content = fs.readFileSync(filePath, 'utf-8');
+  let content: string;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to read env file at "${filePath}": ${message}`);
+  }
   const envMap = parseEnv(content);
   return computeEnvStats(envMap);
 }
