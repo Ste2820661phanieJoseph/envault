@@ -51,6 +51,13 @@ describe('applyPatch', () => {
     expect(result.skipped).toHaveLength(1);
   });
 
+  it('skips rename without newKey', () => {
+    const ops: PatchOperation[] = [{ op: 'rename', key: 'FOO' }];
+    const result = applyPatch(base, ops);
+    expect(result.skipped).toHaveLength(1);
+    expect(result.map.FOO).toBe('bar');
+  });
+
   it('does not mutate original map', () => {
     const ops: PatchOperation[] = [{ op: 'set', key: 'FOO', value: 'changed' }];
     applyPatch(base, ops);
