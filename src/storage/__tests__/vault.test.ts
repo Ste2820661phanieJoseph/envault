@@ -10,6 +10,9 @@ const TEST_ENV_CONTENT = 'API_KEY=abc123\nDB_URL=postgres://localhost/test\nDEBU
 const getVaultPath = (projectId: string) =>
   path.join(VAULT_DIR, `${projectId}.vault.json`);
 
+const readVaultJson = (projectId: string) =>
+  JSON.parse(fs.readFileSync(getVaultPath(projectId), 'utf-8'));
+
 beforeAll(async () => {
   await storeProjectKey(TEST_PROJECT_ID, TEST_PASSPHRASE);
 });
@@ -37,8 +40,7 @@ describe('vault', () => {
   });
 
   it('should store valid JSON with expected fields', async () => {
-    const vaultPath = getVaultPath(TEST_PROJECT_ID);
-    const raw = JSON.parse(fs.readFileSync(vaultPath, 'utf-8'));
+    const raw = readVaultJson(TEST_PROJECT_ID);
     expect(raw).toHaveProperty('projectId', TEST_PROJECT_ID);
     expect(raw).toHaveProperty('encryptedData');
     expect(raw).toHaveProperty('iv');
@@ -56,14 +58,13 @@ describe('vault', () => {
   });
 
   it('should update updatedAt timestamp on overwrite', async () => {
-    const vaultPath = getVaultPath(TEST_PROJECT_ID);
-    const before = JSON.parse(fs.readFileSync(vaultPath, 'utf-8')).updatedAt;
+    const before = readVaultJson(TEST_PROJECT_ID).updatedAt;
 
     // Ensure enough time passes for the timestamp to differ
     await new Promise((resolve) => setTimeout(resolve, 10));
     await writeVault(TEST_PROJECT_ID, TEST_ENV_CONTENT, TEST_PASSPHRASE);
 
-    const after = JSON.parse(fs.readFileSync(vaultPath, 'utf-8')).updatedAt;
+    const after = readVaultJson(TEST_PROJECT_ID).updatedAt;
     expect(new Date(after).getTime()).toBeGreaterThan(new Date(before).getTime());
   });
 });
