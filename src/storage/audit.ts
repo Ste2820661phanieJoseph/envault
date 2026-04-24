@@ -59,3 +59,11 @@ export function getRecentEntries(projectId: string, limit: number = 10): AuditEn
   const entries = loadAuditLog(projectId);
   return entries.slice(-limit);
 }
+
+/**
+ * Returns all audit entries filtered by the specified action type.
+ */
+export function getEntriesByAction(projectId: string, action: AuditEntry['action']): AuditEntry[] {
+  const entries = loadAuditLog(projectId);
+  return entries.filter((entry) => entry.action === action);
+}
