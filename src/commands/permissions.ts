@@ -13,6 +13,15 @@ function getVaultDir(projectId: string): string {
   return path.dirname(getVaultPath(process.cwd(), projectId));
 }
 
+const VALID_ROLES: Permission['role'][] = ['read', 'write', 'admin'];
+
+function validateRole(role: string): asserts role is Permission['role'] {
+  if (!VALID_ROLES.includes(role as Permission['role'])) {
+    console.error(`Invalid role "${role}". Must be one of: ${VALID_ROLES.join(', ')}`);
+    process.exit(1);
+  }
+}
+
 export function registerPermissionsCommand(program: Command): void {
   const perm = program.command('permissions').description('Manage project permissions');
 
@@ -22,11 +31,7 @@ export function registerPermissionsCommand(program: Command): void {
     .option('--project <projectId>', 'Project ID', 'default')
     .option('--by <grantor>', 'Granted by user', 'system')
     .action((user: string, role: string, opts: { project: string; by: string }) => {
-      const validRoles: Permission['role'][] = ['read', 'write', 'admin'];
-      if (!validRoles.includes(role as Permission['role'])) {
-        console.error(`Invalid role "${role}". Must be one of: ${validRoles.join(', ')}`);
-        process.exit(1);
-      }
+      validateRole(role);
       const vaultDir = getVaultDir(opts.project);
       addPermission(vaultDir, user, role as Permission['role'], opts.by);
       console.log(`Granted ${role} to ${user} on project ${opts.project}`);
